@@ -1,0 +1,48 @@
+name: ZZC
+
+#pragma region
+	src
+	hdr
+	ide	?
+	zzc	(e.g. za makroe koje evaluira ZZC, a ne C/C++)
+
+#pragma region hdr src
+#pragma endregion
+
+and
+
+hdr(
+	inline
+src(
+	void f()
+)
+	{
+	} src(;)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+zanima nas samo globalni, namespace i lokalni scope.
+a tu imamo samo 
+	macro           - počinju sa #
+	namespace       - k
+	struct i class  - k, ne moraju počinjati, ako je bilo gdje unutra (osim enum), može imati varijable nakon
+	union           - k
+	enum            - k
+	using           - k
+	template        - k
+	static          - k, ide samo u 
+	varijable       - *, mogu imati =
+	funkcije        - *, mogu imati {}
+	// ne treba nam inline // inline          - k, obrnuto src i hdr
+
+*	ako ima =, onda varijabla
+	ako ima {}, onda funkcija
+	inače deklaracija (ide samo u hdr) (typedef spada u deklaracije)
+*	sastoji se od 
+		identifiera i simbola             - hdr src
+		lijevo i desno od imena, =, {}    - src
+
+
+paziti na stringove i zagrade
+	
