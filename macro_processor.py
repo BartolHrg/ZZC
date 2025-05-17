@@ -4,7 +4,7 @@ from common import *;
 import re;
 import uuid;
 
-from tokenizer1 import TokenType1, Token1;
+from tokenizer import TokenType, Token;
 import file_names;
 
 #	gcc -E -o output input
@@ -25,7 +25,7 @@ class IncludeInfo:
 	after_filename: str;
 	is_zzc: bool;
 pass
-class MacroToken1(Token1):
+class MacroToken(Token):
 	macro_type: Literal["region"] | Literal["endregion"] | Literal["include"] | None;
 	relevant_info: PragmaRegionInfo | IncludeInfo | None;
 pass
@@ -54,9 +54,9 @@ class _RegionMarkerStack:
 		if any(value < 0 for value in self.info.values()): raise ParseError;
 	pass
 pass
-def prepareForPreprocess(tokens: list[Token1]) -> Iterable[str]:
+def prepareForPreprocess(tokens: list[Token]) -> Iterable[str]:
 	for token in tokens:
-		if token.typ == TokenType1.MACRO: 
+		if token.typ == TokenType.MACRO: 
 			_gatherMacroInfo(token);
 		pass
 	pass
@@ -73,8 +73,8 @@ def prepareForPreprocess(tokens: list[Token1]) -> Iterable[str]:
 	yield "#pragma once\n";
 	yield "<:::>\n";
 	for (index, token) in enumerate(tokens):
-		if token.typ == TokenType1.MACRO:
-			token: MacroToken1;
+		if token.typ == TokenType.MACRO:
+			token: MacroToken;
 			if token.macro_type == "include":
 				if region_marker_stack.info["ide"]:
 					yield whitespaceReplacement(token.raw);
@@ -115,9 +115,9 @@ def prepareForPreprocess(tokens: list[Token1]) -> Iterable[str]:
 					if region_marker_stack.info["src"] or region_marker_stack.info["hdr"]: yield f"\n<:::{index}>";
 				else: yield f"<:::{index}>";
 			pass
-		elif token.typ == TokenType1.COMMENT:
+		elif token.typ == TokenType.COMMENT:
 			yield f"<:::{index}>"; #	TODO do we need this?
-		elif token.typ == TokenType1.WHITESPACE:
+		elif token.typ == TokenType.WHITESPACE:
 			yield token.raw;
 		else:
 			if region_marker_stack.info["ide"]:
@@ -130,7 +130,7 @@ def prepareForPreprocess(tokens: list[Token1]) -> Iterable[str]:
 	pass
 	yield "\n<:::>";
 pass
-def _gatherMacroInfo(token: MacroToken1):
+def _gatherMacroInfo(token: MacroToken):
 	raw = token.raw;
 	token.macro_type = None;
 	token.relevant_info = None;
@@ -155,7 +155,7 @@ def _gatherMacroInfo(token: MacroToken1):
 	pass
 pass
 
-def processMarkers(raw: str, original_tokens: list[Token1]) -> Iterable[str]:
+def processMarkers(raw: str, original_tokens: list[Token]) -> Iterable[str]:
 	if "<:::" not in raw: return raw;
 	index_start = raw.index("<:::>") + len("<:::>\n");
 	endex_end = raw.rindex("<:::>") - 1;
@@ -178,7 +178,7 @@ def processMarkers(raw: str, original_tokens: list[Token1]) -> Iterable[str]:
 		pass
 	pass
 pass
-#	def processAfterPreprocess(original_tokens: list[Token1], new_tokens: list[Token1]):
+#	def processAfterPreprocess(original_tokens: list[Token], new_tokens: list[Token]):
 #		#	TODO make sure to tokenize only stuff after first <:::> and before last (also exclude added \n)
 #		result = [];
 #		endex_before = 0;
@@ -226,7 +226,7 @@ pass
 #		pass
 #		return result;
 #	pass
-#	def _indexOfTokenGroup(tokens: list[Token1], item: str, start = 0) -> tuple[int, int] | tuple[None, None]:
+#	def _indexOfTokenGroup(tokens: list[Token], item: str, start = 0) -> tuple[int, int] | tuple[None, None]:
 #		for index in range(start, len(tokens)):
 #			peek = "";
 #			for i in range(index, len(tokens)):
@@ -245,12 +245,12 @@ pass
 if __name__ == "__main__":
 	import sys;
 	import subprocess;
-	from tokenizer1 import tokenize1;
+	from tokenizer import tokenize;
 	filename = sys.argv[1];
 	with open(filename) as f:
 		txt = f.read();
 	pass
-	tokens = list(tokenize1(txt));
+	tokens = list(tokenize(txt));
 	#	for t in tokens: print(t);
 	p = file_names.FilenameParts(filename);
 	t1 = file_names.file_naming.macro_temp_1(p);

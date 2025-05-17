@@ -4,7 +4,7 @@ from itertools import groupby;
 
 from dataclasses import dataclass;
 
-class TokenType1:
+class TokenType:
 	ALNUM      = 1;
 	WHITESPACE = 2;
 	STRING     = 3;
@@ -12,33 +12,33 @@ class TokenType1:
 	MACRO      = 5;
 	SYMBOL     = 6;
 pass
-TOKEN1_NAMES = {
-	TokenType1.ALNUM     : "ALNUM     ",
-	TokenType1.WHITESPACE: "WHITESPACE",
-	TokenType1.STRING    : "STRING    ",
-	TokenType1.COMMENT   : "COMMENT   ",
-	TokenType1.MACRO     : "MACRO     ",
-	TokenType1.SYMBOL    : "SYMBOL    ",
+Token_NAMES = {
+	TokenType.ALNUM     : "ALNUM     ",
+	TokenType.WHITESPACE: "WHITESPACE",
+	TokenType.STRING    : "STRING    ",
+	TokenType.COMMENT   : "COMMENT   ",
+	TokenType.MACRO     : "MACRO     ",
+	TokenType.SYMBOL    : "SYMBOL    ",
 };
 
 @dataclass
-class Token1:
-	typ: TokenType1;
+class Token:
+	typ: TokenType;
 	raw: str;
 	
-	def __repr__(self): return f"{TOKEN1_NAMES[self.typ]}: {self.raw.replace('\n', '\\n').replace('\t', '\\t')}";
+	def __repr__(self): return f"{Token_NAMES[self.typ]}: {self.raw.replace('\n', '\\n').replace('\t', '\\t')}";
 pass
 
-def tokenize1(zzc: str) -> Iterable[Token1]:
-	tokens = _tokenize1(zzc);
+def tokenize(zzc: str) -> Iterable[Token]:
+	tokens = _tokenize(zzc);
 	#	tokens = ((k, "".join(g)) for (k, g) in groupby(tokens, key = lambda token: token.typ));
 	return list(tokens);
 pass
-def _tokenize1(zzc: str) -> Iterable[Token1]:
+def _tokenize(zzc: str) -> Iterable[Token]:
 	index = 0;
 	while index < len(zzc):
 		try:
-			(token, index) = getNextToken1(zzc, index);
+			(token, index) = getNextToken(zzc, index);
 			if index == 0: raise ParseError("Infinite Loop");
 		except:
 			print(f"Error when trying to parse from {index}: <{zzc[index : index + 10]}...>");
@@ -49,7 +49,7 @@ def _tokenize1(zzc: str) -> Iterable[Token1]:
 	pass
 pass
 
-def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
+def getNextToken(zzc: str, index: int) -> tuple[Token, int]:
 	(c, d) = (zzc + " ")[index : index + 2];
 	if c.isalnum() or c == "_":
 		token = "";
@@ -60,7 +60,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			i += 1;
 		pass
-		return (Token1(TokenType1.ALNUM, token), i);
+		return (Token(TokenType.ALNUM, token), i);
 	pass
 	if c.isspace() or c == "\\":
 		token = "";
@@ -71,8 +71,8 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			i += 1;
 		pass
-		return (Token1(TokenType1.WHITESPACE, token), i);
-		typ = TokenType1.WHITESPACE;
+		return (Token(TokenType.WHITESPACE, token), i);
+		typ = TokenType.WHITESPACE;
 	pass
 	if c == "'":
 		token = "'";
@@ -83,7 +83,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			raise ParseError(IndexError);
 		pass
-		return (Token1(TokenType1.STRING, token + "'"), i + 1);
+		return (Token(TokenType.STRING, token + "'"), i + 1);
 	pass
 	if c == '"':
 		token = '"';
@@ -101,7 +101,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			raise ParseError(IndexError);
 		pass
-		return (Token1(TokenType1.STRING, token + '"'), i + 1);
+		return (Token(TokenType.STRING, token + '"'), i + 1);
 	pass
 	if c == "/" and d == "*":
 		token = "/*";
@@ -112,7 +112,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			raise ParseError(IndexError);
 		pass
-		return (Token1(TokenType1.COMMENT, token + "*/"), i + 2);
+		return (Token(TokenType.COMMENT, token + "*/"), i + 2);
 	pass
 	if c == '/' and d == "/":
 		token = '//';
@@ -125,7 +125,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			i += 1
 		pass
-		return (Token1(TokenType1.COMMENT, token), i);
+		return (Token(TokenType.COMMENT, token), i);
 	pass
 	if c == '#':
 		token = '#';
@@ -138,16 +138,16 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			i += 1
 		pass
-		return (Token1(TokenType1.MACRO, token), i);
+		return (Token(TokenType.MACRO, token), i);
 	pass
-	return (Token1(TokenType1.SYMBOL, c), index + 1);
+	return (Token(TokenType.SYMBOL, c), index + 1);
 pass
 
 
 if __name__ == "__main__":
 	import sys;
 	txt = sys.stdin.read();
-	for token in tokenize1(txt):
+	for token in tokenize(txt):
 		print(token);
 	pass
 	#	WHITESPACE \n\t\t
