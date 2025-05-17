@@ -2,6 +2,8 @@ from common import *;
 from typing import *;
 from itertools import groupby;
 
+from dataclasses import dataclass;
+
 class TokenType1:
 	ALNUM      = 1;
 	WHITESPACE = 2;
@@ -19,11 +21,17 @@ TOKEN1_NAMES = {
 	TokenType1.SYMBOL    : "SYMBOL    ",
 };
 
-Token1 = tuple[TokenType1, str];
+@dataclass
+class Token1:
+	typ: TokenType1;
+	raw: str;
+	
+	def __repr__(self): return f"{TOKEN1_NAMES[self.typ]}: {self.raw.replace('\n', '\\n').replace('\t', '\\t')}";
+pass
 
 def tokenize1(zzc: str) -> Iterable[Token1]:
 	tokens = _tokenize1(zzc);
-	#	tokens = ((k, "".join(g)) for (k, g) in groupby(tokens, key = lambda token: token[0]));
+	#	tokens = ((k, "".join(g)) for (k, g) in groupby(tokens, key = lambda token: token.typ));
 	return list(tokens);
 pass
 def _tokenize1(zzc: str) -> Iterable[Token1]:
@@ -52,7 +60,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			i += 1;
 		pass
-		return ((TokenType1.ALNUM, token), i);
+		return (Token1(TokenType1.ALNUM, token), i);
 	pass
 	if c.isspace() or c == "\\":
 		token = "";
@@ -63,7 +71,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			i += 1;
 		pass
-		return ((TokenType1.WHITESPACE, token), i);
+		return (Token1(TokenType1.WHITESPACE, token), i);
 		typ = TokenType1.WHITESPACE;
 	pass
 	if c == "'":
@@ -75,7 +83,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			raise ParseError(IndexError);
 		pass
-		return ((TokenType1.STRING, token + "'"), i + 1);
+		return (Token1(TokenType1.STRING, token + "'"), i + 1);
 	pass
 	if c == '"':
 		token = '"';
@@ -93,7 +101,7 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			raise ParseError(IndexError);
 		pass
-		return ((TokenType1.STRING, token + '"'), i + 1);
+		return (Token1(TokenType1.STRING, token + '"'), i + 1);
 	pass
 	if c == "/" and d == "*":
 		token = "/*";
@@ -104,73 +112,43 @@ def getNextToken1(zzc: str, index: int) -> tuple[Token1, int]:
 		else:
 			raise ParseError(IndexError);
 		pass
-		return ((TokenType1.COMMENT, token + "*/"), i + 2);
+		return (Token1(TokenType1.COMMENT, token + "*/"), i + 2);
 	pass
 	if c == '/' and d == "/":
 		token = '//';
 		last_was_exc = False;
 		for i in range(index + 1, len(zzc)):
 			(c, d) = (zzc + " ")[i : i + 2];
-			if last_was_exc:
-				last_was_exc = False;
-				token += c;
-				continue;
-			pass
-			if c == "\\": last_was_exc = True;
-			elif c == "\n": break;
+			if c == "\n" and not last_was_exc: break;
+			last_was_exc = c == "\\";
 			token += c;
 		else:
 			i += 1
 		pass
-		return ((TokenType1.COMMENT, token), i);
+		return (Token1(TokenType1.COMMENT, token), i);
 	pass
 	if c == '#':
 		token = '#';
 		last_was_exc = False;
 		for i in range(index + 1, len(zzc)):
 			(c, d) = (zzc + " ")[i : i + 2];
-			if last_was_exc:
-				last_was_exc = False;
-				token += c;
-				continue;
-			pass
-			if c == "\\": last_was_exc = True;
-			elif c == "\n": break;
+			if c == "\n" and not last_was_exc: break;
+			last_was_exc = c == "\\";
 			token += c;
 		else:
 			i += 1
 		pass
-		return ((TokenType1.MACRO, token), i);
+		return (Token1(TokenType1.MACRO, token), i);
 	pass
-	return ((TokenType1.SYMBOL, c), index + 1);
+	return (Token1(TokenType1.SYMBOL, c), index + 1);
 pass
 
 
 if __name__ == "__main__":
-	txt = """
-		#include <iostream> 
-
-		struct S {
-			int x;
-			//	int y;\\
-			int z;
-		}
-		__attribute__(("packed"))
-		struct S {
-			int x = 1; \\
-		} a;
-		# define ABC \\
-		DEF
-		# include <xyz>
-		"abc\\\\n\\\\\\" def"
-		/* 
-		/* 
-		#
-		"
-		*/
-	""";
-	for (typ, token) in tokenize1(txt):
-		print(TOKEN1_NAMES[typ], token.replace("\n", "\\n").replace("\t", "\\t"));
+	import sys;
+	txt = sys.stdin.read();
+	for token in tokenize1(txt):
+		print(token);
 	pass
 	#	WHITESPACE \n\t\t
 	#	MACRO      #include <iostream> 

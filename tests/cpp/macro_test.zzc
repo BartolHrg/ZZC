@@ -1,0 +1,16 @@
+#include <iostream>
+#pragma region zzc ide
+void f();
+
+#define A aa
+
+#pragma region zzc zzc hdr
+	#define B bb
+#pragma endregion zzc
+
+A
+#pragma endregion zzc
+B
+
+#include <vector>
+
