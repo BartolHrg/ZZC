@@ -1,15 +1,15 @@
 #include <iostream>
-#pragma region zzc ide
 void f();
 
+#include "./macro_test_module.zzh"
 #define A aa
 
 #pragma region zzc zzc hdr
 	#define B bb
 #pragma endregion zzc
 
+M
 A
-#pragma endregion zzc
 B
 
 #include <vector>
