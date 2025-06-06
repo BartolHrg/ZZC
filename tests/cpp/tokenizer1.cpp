@@ -1,5 +1,12 @@
 #include <iostream> 
 
+
+struct FFF {
+    FFF operator ()() { return FFF{}; }
+} fff;
+auto ff = fff();
+
+
 //	#include /* hghj */ <iostream> // hgh
 	//	this would be invalid (or maybe not, but who does that anyway)
 struct S {
@@ -7,7 +14,7 @@ struct S {
 	//	int y;\\
 	int z;
 }
-__attribute__(("packed"))
+__attribute__((__packed__))
 struct S {
 	void f() {
 		return;

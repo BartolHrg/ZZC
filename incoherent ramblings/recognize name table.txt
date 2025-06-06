@@ -1,0 +1,11 @@
+
+ a   b    b
+ a  (b)   a
+(a)  b    b
+(a) (b)   not allowed
+
+we will dissalow parens except  with symbol like (* arrp)
+
+name is last alnum outside () except those with symbol right after (
+
+paziti na zareze

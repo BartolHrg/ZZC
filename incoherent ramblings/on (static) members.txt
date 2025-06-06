@@ -1,0 +1,9 @@
+# constexpr, const, inline, static
+
+if constexpr:
+	all in class
+if inline:
+	all in class
+if const:
+if static:
+	static keyword not needed in definition

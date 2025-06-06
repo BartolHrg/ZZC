@@ -1,0 +1,39 @@
+	SemanticType.OTHER    : "OTHER    ",
+	SemanticType.NAMESPACE: "NAMESPACE",
+	SemanticType.STRUCT   : "STRUCT   ",
+	SemanticType.UNION    : "UNION    ",
+	SemanticType.ENUM     : "ENUM     ",
+	SemanticType.USING    : "USING    ",
+	SemanticType.TEMPLATE : "TEMPLATE ",
+	SemanticType.FRIEND   : "FRIEND   ",
+	SemanticType.VAR      : "VAR      ",
+	SemanticType.FUN      : "FUN      ",
+	SemanticType.MACRO    : "MACRO    ",
+
+macro:
+	if define: decide
+	else: outputs every time 
+
+	if hdr or src: straight outputer to contents
+
+namespace:
+	if anon: output only to src, mark this somehow (hdr = wh, src = out)
+	else: normal
+
+struct:
+	if anon: only in decl
+	else: append prefix to impl, mark this somehow
+
+union: only in decl
+
+enum: only in decl
+
+using: only in decl
+
+typedef: only in decl
+
+template: only in decl
+
+friend: only in decl
+
+var fun:

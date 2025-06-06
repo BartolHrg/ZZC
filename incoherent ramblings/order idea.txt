@@ -1,0 +1,22 @@
+hdr
+	pragma once
+	#	includes
+	#	forward declare classes (struct S;)
+	type declarations (typedefs classes usings )
+	declarations
+src
+	include hdr
+	#	includes
+	#	forward declare classes (struct S;)
+	type declarations
+	declarations
+	implementations
+
+everything should be sorounded by same macroes (except defines)
+	every file will have 2 parts:
+		declaration
+		definitions
+
+i have to be careful because default arguments must appear only once
+that is only in declaration
+both for templates and for functions

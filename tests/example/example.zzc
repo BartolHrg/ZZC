@@ -1,0 +1,10 @@
+#include <iostream>
+#include <vector>
+
+namespace {
+	struct X {
+		int b = 0;
+		inline static int c = 0;
+	};
+	int a = 0;
+}

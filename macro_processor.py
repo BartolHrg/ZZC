@@ -3,84 +3,135 @@ from common import *;
 
 import re;
 import uuid;
+import copy;
+from dataclasses import dataclass;
 
 from tokenizer import TokenType, Token;
 import file_names;
+import token_outputer;
 
 #	gcc -E -o output input
 #	we should add 
 #	#define ide(...)
 #	and filter based on region markers
 
-class PragmaRegionInfo(TypedDict):
-	src: bool;
-	hdr: bool;
-	ide: bool;
-	zzc: bool;
+class RegionInfo:
+	ide     : bool = False;
+	zzc     : bool = False;
+	
+	src_decl: bool = False;
+	src_impl: bool = False;
+	
+	hdr_decl: bool = False;
+	hdr_impl: bool = False;
+	
+	_src: bool;
+	_hdr: bool;
+	
+	@property
+	def src(self): return (False
+		or self.src_decl
+		or self.src_impl
+	);
+	@property
+	def hdr(self): return (False
+		or self.hdr_decl
+		or self.hdr_impl
+	);
+	
+	@classmethod
+	def fromDict(cls, d):
+		self = cls();
+		for (k, v) in d.items(): setattr(self, k, v);
+		return self;
+	pass
+	def copy(self): return copy.copy(self);
+	def __getitem__(self, key): return getattr(self, key);
+	def __setitem__(self, key): return setattr(self, key);
+	def keys(self): return region_markers;
+	def values(self): return [self[key] for key in region_markers];
+	def items(self): return [(key, self[key]) for key in region_markers];
 pass
-region_markers = PragmaRegionInfo.__annotations__.keys();
+region_markers = RegionInfo.__annotations__.keys();
+class RToken(Token):
+	declared_region: RegionInfo;
+pass
 class IncludeInfo:
 	before_filename: str;
 	filename: str;
 	after_filename: str;
 	is_zzc: bool;
 pass
-class MacroToken(Token):
-	macro_type: Literal["region"] | Literal["endregion"] | Literal["include"] | None;
-	relevant_info: PragmaRegionInfo | IncludeInfo | None;
+class MacroType:
+	REGION    = 1;
+	ENDREGION = 2;
+	INCLUDE   = 3;
+	DEFINE    = 4;
+pass
+@dataclass
+class DefineInfo:
+	name: str;
+	def_undef: int;
+pass
+class MacroToken(RToken):
+	macro_type: MacroType | None;
+	relevant_info: RegionInfo | IncludeInfo | DefineInfo | None;
 pass
 
 
-class _ShouldYield(NamedTuple):
-	code   : bool;
-	macro  : bool;
-	include: bool;
-pass
 class _RegionMarkerStack:
-	info: PragmaRegionInfo = PragmaRegionInfo;
-	stack : list[PragmaRegionInfo];
+	_info: RegionInfo;
+	stack: list[RegionInfo];
 	def __init__(self):
-		self.info = PragmaRegionInfo({key: False for key in region_markers});
+		self._info = RegionInfo();
 		self.stack = [];
 	pass
 	#	for push & pop, we use clever trick: treat bool as int (so, we count how many times we saw each marker)
-	def push(self, info: PragmaRegionInfo):
+	def push(self, info: RegionInfo):
 		self.stack.append(info);
-		for (key, value) in info.items(): self.info[key] += value;
+		for (key, value) in info.items(): self._info[key] += value;
 	pass
 	def pop(self):
 		info = self.stack.pop();
-		for (key, value) in info.items(): self.info[key] -= value;
-		if any(value < 0 for value in self.info.values()): raise ParseError;
+		for (key, value) in info.items(): self._info[key] -= value;
+		if any(value < 0 for value in self._info.values()): raise ParseError;
 	pass
+	@property
+	def info(self): return self._info.copy();
 pass
-def prepareForPreprocess(tokens: list[Token]) -> Iterable[str]:
+
+def transformIntoRTokens(tokens: list[Token]):
 	for token in tokens:
 		if token.typ == TokenType.MACRO: 
-			_gatherMacroInfo(token);
+			gatherMacroInfo(token);
 		pass
 	pass
-	region_marker_stack = _RegionMarkerStack();
-	def getShouldYield() -> _ShouldYield:
-		info = region_marker_stack.info;
-		if info["ide"]: return _ShouldYield(False, False, False);
-		if info["zzc"]: return _ShouldYield(True , True , True );
-		if info["src"]: return _ShouldYield(False, False, False);
-		if info["hdr"]: return _ShouldYield(False, False, False);
-		return _ShouldYield(True, False, True);
+	stack = _RegionMarkerStack();
+	for token in tokens:
+		token: RToken;
+		token.declared_region = stack.info;
+		
+		if token.typ == TokenType.MACRO:
+			token: MacroToken;
+			if   token.macro_type == MacroType.REGION   : stack.push(token.relevant_info);
+			elif token.macro_type == MacroType.ENDREGION: stack.pop();
+		pass
 	pass
-	should_yield = getShouldYield();
+pass
+
+
+def prepareForPreprocess(tokens: list[RToken]) -> Iterable[str]:
 	yield "#pragma once\n";
 	yield "<:::>\n";
 	for (index, token) in enumerate(tokens):
 		if token.typ == TokenType.MACRO:
 			token: MacroToken;
-			if token.macro_type == "include":
-				if region_marker_stack.info["ide"]:
+			if token.macro_type == MacroType.INCLUDE:
+				if token.declared_region.ide:
 					yield whitespaceReplacement(token.raw);
 					continue;
 				pass
-				shouldnt_yield = region_marker_stack.info["zzc"] and not region_marker_stack.info["src"] and not region_marker_stack.info["hdr"];
+				shouldnt_yield = token.declared_region.zzc and not token.declared_region.src and not token.declared_region.hdr;
 				if not shouldnt_yield: 
 					info: IncludeInfo = token.relevant_info;
 					if info.is_zzc:
@@ -99,20 +150,18 @@ def prepareForPreprocess(tokens: list[Token]) -> Iterable[str]:
 				else: 
 					yield f"<:::{index}>";
 				pass
-			elif token.macro_type == "region":
-				region_marker_stack.push(token.relevant_info);
+			elif token.macro_type == MacroType.REGION:
 				yield f"<:::{index}>";
-			elif token.macro_type == "endregion":
-				region_marker_stack.pop();
+			elif token.macro_type == MacroType.ENDREGION:
 				yield f"<:::{index}>";
 			else:
-				if region_marker_stack.info["ide"]:
+				if token.declared_region.ide:
 					yield whitespaceReplacement(token.raw);
 					continue;
 				pass
-				if region_marker_stack.info["zzc"]: 
+				if token.declared_region.zzc: 
 					yield token.raw;
-					if region_marker_stack.info["src"] or region_marker_stack.info["hdr"]: yield f"\n<:::{index}>";
+					if token.declared_region.src or token.declared_region.hdr: yield f"\n<:::{index}>";
 				else: yield f"<:::{index}>";
 			pass
 		elif token.typ == TokenType.COMMENT:
@@ -120,29 +169,33 @@ def prepareForPreprocess(tokens: list[Token]) -> Iterable[str]:
 		elif token.typ == TokenType.WHITESPACE:
 			yield token.raw;
 		else:
-			if region_marker_stack.info["ide"]:
+			if token.declared_region.ide:
 				yield whitespaceReplacement(token.raw);
 				continue;
 			pass
-			if region_marker_stack.info["src"] or region_marker_stack.info["hdr"]: yield f"<:::{index}>";
+			if token.declared_region.zzc: yield token.raw;
+			elif token.declared_region.src or token.declared_region.hdr: yield f"<:::{index}>";
 			else: yield token.raw;
 		pass
 	pass
 	yield "\n<:::>";
 pass
-def _gatherMacroInfo(token: MacroToken):
+def gatherMacroInfo(token: MacroToken):
 	raw = token.raw;
 	token.macro_type = None;
 	token.relevant_info = None;
-	if False: pass;
-	elif match := re.match(r"#[\s\\]*pragma[\s\\]*region[\s\\]*zzc", raw):
-		token.macro_type = "region";
+	if match := re.match(r"#[\s\\]*pragma[\s\\]*region[\s\\]*zzc\b", raw):
+		token.macro_type = MacroType.REGION;
 		words = re.split(r"\b", raw[match.end() : ]);
-		token.relevant_info = info = PragmaRegionInfo({key: key in words for key in region_markers});
-	elif re.match(r"#[\s\\]*pragma[\s\\]*endregion[\s\\]*zzc", raw):
-		token.macro_type = "endregion";
+		token.relevant_info = info = RegionInfo({key: key in words for key in region_markers});
+		if not info.src and "src" in words: info.src_impl = True;
+		if not info.hdr and "hdr" in words: info.hdr_impl = True;
+		if "src" in words: info._src = True;
+		if "hdr" in words: info._hdr = True;
+	elif re.match(r"#[\s\\]*pragma[\s\\]*endregion[\s\\]*zzc\b", raw):
+		token.macro_type = MacroType.ENDREGION;
 	elif match := re.match(r"#[\s\\]*include[\s\\]*", raw):
-		token.macro_type = "include";
+		token.macro_type = MacroType.INCLUDE;
 		c = raw[match.end()];
 		start_index = match.end() + 1;
 		if c == '"': end_index = raw.index('"', start_index);
@@ -152,16 +205,23 @@ def _gatherMacroInfo(token: MacroToken):
 		info.filename        = raw[   start_index : end_index   ];
 		info.after_filename  = raw[                 end_index : ];
 		info.is_zzc = info.filename.endswith(".zzc") or info.filename.endswith(".zzh");
+	elif m := re.match(r"#[\s\\]*define\s+(\w+)\b", raw):
+		token.macro_type = MacroType.DEFINE;
+		token.relevant_info = DefineInfo(m.group(1), +1);
+	elif m := re.match(r"#[\s\\]*undef\s+(\w+)\b", raw):
+		token.macro_type = MacroType.DEFINE;
+		token.relevant_info = DefineInfo(m.group(1), -1);
 	pass
 pass
 
 def processMarkers(raw: str, original_tokens: list[Token]) -> Iterable[str]:
-	if "<:::" not in raw: return raw;
+	if "<:::>" not in raw: return raw;
+	string_indexes = list(_quickFindStrings(raw));
 	index_start = raw.index("<:::>") + len("<:::>\n");
 	endex_end = raw.rindex("<:::>") - 1;
 	if endex_end < index_start: return raw;
 	index = index_start;
-	while (index := raw.index("<:::", index_start)) < endex_end:
+	while (index := _markerIndex(raw, "<:::", index_start, string_indexes)) < endex_end:
 		yield raw[index_start : index];
 		if match := re.match(r"(\d+)>", raw[index + len("<:::") : index + 64]):
 			i = int(match.group(1));
@@ -178,6 +238,42 @@ def processMarkers(raw: str, original_tokens: list[Token]) -> Iterable[str]:
 		pass
 	pass
 pass
+def _markerIndex(raw: str, sub: str, index_start: int, string_indexes: list[tuple[int, int]]) -> int:
+	while True:
+		index = raw.index(sub, index_start);
+		if any(a < index < b for (a, b) in string_indexes):
+			index_start = index + 1;
+		else:
+			break;
+		pass
+	return index;
+pass
+def _quickFindStrings(raw: str) -> Iterable[tuple[int, int]]:
+	indexes = [index for index in _findIndexesOf(raw, '"') if _countBackslashesBefore(raw, index) % 2 == 0];
+	if len(indexes) % 2 != 0: raise ParseError;
+	for i in range(0, len(indexes), 2):
+		yield (indexes[i], indexes[i + 1]);
+	pass
+pass
+def _findIndexesOf[T](collection: Sequence[T], item: T) -> Iterable[int]:
+	index = 0;
+	while True:
+		try: index = collection.index(item, index);
+		except IndexError: return;
+		yield index;
+		index += 1;
+	pass
+pass
+def _countBackslashesBefore(string: str, index: int) -> int:
+	count = 0;
+	index -= 1;
+	while string[index] == "\\":
+		count += 1;
+		index -= 1;
+	pass
+	return count;
+pass
+
 #	def processAfterPreprocess(original_tokens: list[Token], new_tokens: list[Token]):
 #		#	TODO make sure to tokenize only stuff after first <:::> and before last (also exclude added \n)
 #		result = [];

@@ -2,6 +2,7 @@ from common import *;
 from typing import *;
 from itertools import groupby;
 
+import copy;
 from dataclasses import dataclass;
 
 class TokenType:
@@ -28,6 +29,16 @@ class Token:
 	
 	def __repr__(self): return f"{Token_NAMES[self.typ]}: {self.raw.replace('\n', '\\n').replace('\t', '\\t')}";
 pass
+
+def whitespaceReplacementToken[_Token: Token](original: _Token) -> _Token:
+	result = copy.copy(original);
+	result.typ = TokenType.WHITESPACE;
+	result.raw = whitespaceReplacement(original.raw);
+	#	SToken
+	result.ephermal = True;
+	return result;
+pass
+
 
 def tokenize(zzc: str) -> Iterable[Token]:
 	tokens = _tokenize(zzc);

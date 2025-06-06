@@ -37,7 +37,7 @@ a tu imamo samo
 	// ne treba nam inline // inline          - k, obrnuto src i hdr
 
 *	ako ima =, onda varijabla
-	ako ima {}, onda funkcija
+	ako ima {}, onda funkcija ili try!!!!!!!!
 	inače deklaracija (ide samo u hdr) (typedef spada u deklaracije)
 *	sastoji se od 
 		identifiera i simbola             - hdr src
@@ -45,4 +45,5 @@ a tu imamo samo
 
 
 paziti na stringove i zagrade
+paziti na try funkcije
 	
