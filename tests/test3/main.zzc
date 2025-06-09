@@ -1,0 +1,12 @@
+template <typename T = void>
+struct S {};
+
+template <typename T = void>
+fun void f() {}
+
+fun void g(int a = 0) {}
+
+template <typename T = void>
+fun void h(int a = 0) {}
+
+fun int main() {}

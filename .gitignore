@@ -1,3 +1,8 @@
 __pycache__
 *.temp.*
 temp
+*.exe
+*.cpp
+*.hpp
+*.zzh
+*.o

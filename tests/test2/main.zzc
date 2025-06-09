@@ -1,0 +1,20 @@
+#include "./module.zzc"
+#include "./a.zzc"
+#include "./b.zzc"
+
+#include <iostream>
+
+
+fun int main() {
+	Matrix<2, 3> a;
+	Matrix<3, 4> b;
+	Matrix<2, 4> c;
+	a.multiply(b, c);
+	
+	Vector<5> v;
+	v.dot(v);
+	v.length2();
+	
+	af();
+	bf();
+}

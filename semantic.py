@@ -37,22 +37,13 @@ SEMANTIC_NAMES = {
 };
 
 class SematicRegions:
-	fwd     : str;
+	fwd     : str = "";
 	
-	src_decl: str;
-	src_impl: str;
+	src_decl: str = "";
+	src_impl: str = "";
 	
-	hdr_decl: str;
-	hdr_impl: str;
-	
-	def __init__(self, raw: str):
-		wh = whitespaceReplacement(raw);
-		self.fwd      = wh;
-		self.src_decl = wh;
-		self.src_impl = wh;
-		self.hdr_decl = wh;
-		self.hdr_impl = wh;
-	pass
+	hdr_decl: str = "";
+	hdr_impl: str = "";
 pass
 sematic_region_keys = SematicRegions.__annotations__.keys();
 
@@ -82,22 +73,13 @@ def semanticAnalysis(tokens: list[RToken]):
 	for token in tokens:
 		token: SToken;
 		token.fwd = None;
-		token.region = SematicRegions(token.raw);
+		token.region = SematicRegions();
 		token.ephermal = token.typ in EPHERMALS;
 		token.should_be_included_in_var = False;
-		if token.typ == TokenType.MACRO:
-			token: SMacroToken;
-			if token.macro_type == MacroType.DEFINE:
-				name      = token.relevant_info.name;
-				def_undef = token.relevant_info.def_undef;
-				if   def_undef == +1: token.raw = f"#ifndef {name}\n{token.raw}\n#endif"
-				if   def_undef == -1: token.raw = f"#ifdef  {name}\n{token.raw}\n#endif"
-			pass
-		pass
 	pass
 	tokens: list[SToken];
-	semantic_stack = SemanticStack("", 0, 0, 0, 0, 0);
-	fwd = FwdRegistry();
+	semantic_stack = SemanticStack();
+	fwd = FwdRegistry(0);
 	token0 = SToken(TokenType.WHITESPACE, "");
 	#	RToken
 	token0.declared_region = RegionInfo();
@@ -106,19 +88,22 @@ def semanticAnalysis(tokens: list[RToken]):
 	token0.region = SematicRegions();
 	token0.ephermal = True;
 	tokens.insert(0, token0);
-	if _semanticAnalysisRecursion(tokens, 0, len(tokens), semantic_stack, fwd) != len(tokens):
-		raise ParseError;
+	if (r := _semanticAnalysisRecursion(tokens, 1, len(tokens), semantic_stack, fwd)) != len(tokens):
+		raise ParseError(r);
 	pass
 	
 	for token in tokens:
 		regions = {key: getattr(token.declared_region, key) for key in region_markers if key not in ("zzc", "ide", )};
-		if any(regions.values):
+		if any(regions.values()):
 			raw = token.raw;
-			wh = whitespaceReplacement(raw);
-			reg = token.region = SematicRegions(raw);
+			reg = token.region = SematicRegions();
 			for (k, v) in regions.items():
 				if v: setattr(reg, k, raw);
-				else: setattr(reg, k, wh);
+				else: setattr(reg, k, "");
+			pass
+			if token.ephermal:
+				token.ephermal = False;
+				token.region.fwd = raw;
 			pass
 		pass
 	pass
@@ -130,14 +115,19 @@ def _semanticAnalysisRecursion(tokens: list[SToken], index: int, endex: int, sem
 		if i == index: raise ParseError;
 		index = i;
 	pass
+	return endex;
 pass
 def _parseNextUnit(tokens: list[SToken], index: int, endex: int, semantic_stack: SemanticStack, fwd: FwdRegistry) -> int:
 	#	first = tokens[index];
-	for (i, token) in SimpleSliceIter(tokens, index, endex):
+	for (i, token) in (it := SimpleSliceIter(tokens, index, endex)):
 		raw = token.raw;
 		if token.typ in EPHERMALS: continue;
 		#	if token.raw in "={;": return _possibleVarFun(tokens, index, endex, semantic_stack);
 		if raw == ";"                             : return _vars                  (tokens, index, i,        semantic_stack, fwd);
+		if raw in "<([{": 
+			it.setNext(_findClosing(tokens, i));
+			continue;
+		pass
 		if token.typ != TokenType.ALNUM: continue;
 		if raw == "fun"                           : return _function              (tokens, index, i, endex, semantic_stack, fwd);
 		if raw == "namespace"                     : return _namespace             (tokens, index, i, endex, semantic_stack, fwd);
@@ -161,7 +151,7 @@ pass
 
 def _vars(tokens: list[SToken], index: int, index_semicolon: int, semantic_stack: SemanticStack, fwd: FwdRegistry) -> int:
 	semantic_stack = semantic_stack.copy();
-	commas: list[int] = [0];
+	commas: list[int] = [index];
 	static_eligible = True;
 	static = False;
 	inline = False;
@@ -182,31 +172,36 @@ def _vars(tokens: list[SToken], index: int, index_semicolon: int, semantic_stack
 	semantic_stack.inline += inline;
 	context = booleansToInt(semantic_stack.anonymous, semantic_stack.template, semantic_stack.in_struct, static, inline);
 	for i in range(len(commas) - 1):
-		(a, b) = commas[i : i + 1];
+		(a, b) = commas[i : i + 2];
 		_var(tokens, a, b, semantic_stack, fwd, context);
 	pass
-	return (index_semicolon + 1, ...);
+	return index_semicolon + 1;
 pass
 def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: SemanticStack, fwd: FwdRegistry, context: int):
 	index_name = None;
+	index_struct = None;
 	has_init = False;
+	extern_insert = index; #	extern does not clash with struct, since, if struct has no body, it's in impl and there is no extern
 	
-	holes: list[range] = [];
-	for (i, token) in (it := SimpleSliceIter(tokens, index, index_comma - 1)):
-		if token.raw == "enum": 
-			j = _enum(tokens, i, index_comma, semantic_stack, fwd);
-			it.setNext(j);
-			holes.append(range(i, j));
+	for (i, token) in (it := SimpleSliceIter(tokens, index, index_comma)):
+		if token.raw in ("struct", "class", "union", "enum", ): 
+			index_struct = i;
+			it.setNext(_enum_struct_skip(tokens, i, index_comma + 1));
 			index_name = None;
 			continue;
-		elif token.raw in ("struct", "class", "union", ): 
-			j = _struct(tokens, i, index_comma, semantic_stack, fwd);
-			it.setNext(j);
-			holes.append(range(i, j));
-			index_name = None;
-			continue;
+		elif token.raw == "extern":
+			extern_insert = None;
+		elif token.typ == TokenType.MACRO and extern_insert is not None:
+			token: SMacroToken;
+			if token.macro_type != MacroType.DEFINE:
+				extern_insert = i + 1;
+			pass
 		elif is_notaname(token):
-			it.setNext(is_notaname.skip(tokens, i));
+			j = is_notaname.skip(tokens, i)
+			if token.raw == "requires":
+				extern_insert = j
+			pass
+			it.setNext(j);
 		elif token.raw in "<[":
 			i = _findClosing(tokens, i);
 			it.setNext(i);
@@ -235,38 +230,74 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 			index_name = i;
 		pass
 	pass
+	
+	if index_name is None:
+		if index_struct is not None:
+			if tokens[index_struct].raw == "enum": _enum  (tokens, index, index_struct, index_comma + 1, semantic_stack, fwd, False);
+			else:                                  _struct(tokens, index, index_struct, index_comma + 1, semantic_stack, fwd, False);
+		pass
+		return;
+	pass
+	
+	if extern_insert is not None:
+		for (extern_insert, tt) in SimpleSliceIter(tokens, extern_insert, index_name):
+			if tt.typ == TokenType.WHITESPACE: continue;
+			if tt.typ == TokenType.MACRO: 
+				tt: SMacroToken;
+				if tt.macro_type != MacroType.DEFINE:
+					continue;
+				pass
+			pass
+			break;
+		pass
+	pass
+	
+	hole = ();
+	if index_struct is not None:
+		if tokens[index_struct].raw == "enum": hole = range(index_struct, _enum  (tokens, index, index_struct, index_comma + 1, semantic_stack, fwd, True));
+		else:                                  hole = range(index_struct, _struct(tokens, index, index_struct, index_comma + 1, semantic_stack, fwd, True));
+	pass
+	
 	if has_init:
 		index_init = i;
 	else:
 		index_init = index_comma;
 	pass
-
+	
 	#	b              bi     ib
 	#	|              ||     ||
 	#	some_stuff name = value,
 	
 	#	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 	#	C++ (unlike C) requires `extern` keyword for declaration
-	added_extern = " extern ";
+	added_extern = " extern " if index_name is not None else "";
 	
 	#	set regions
 	for (i, token) in chain(SimpleSliceIter(tokens, index, index_init), [(index_comma, tokens[index_comma])]):
-		raw = token.raw;
+		raw = decl = impl = token.raw;
 		region = token.region;
 		if token.should_be_included_in_var:
-			pass;
-		elif any(i in r for r in holes):
+			if type(token.should_be_included_in_var) is str:
+				impl = token.should_be_included_in_var;
+			pass
+		elif i in hole:
 			continue;
 		pass
 		#	anonymous template in_struct static inline
 		if   context == 0b00000:
-			region.hdr_decl = added_extern + raw;
-			region.src_impl = raw;
-			added_extern = "";
+			region.hdr_decl = decl;
+			region.src_impl = impl;
+			if extern_insert == i:
+				tokens[extern_insert].region.hdr_decl = added_extern + tokens[extern_insert].region.hdr_decl;
+				added_extern = "";
+			pass
 		elif context == 0b00001:
-			region.hdr_decl = added_extern + raw;
-			region.hdr_impl = raw;
-			added_extern = "";
+			region.hdr_decl = decl;
+			region.hdr_impl = impl;
+			if extern_insert == i:
+				tokens[extern_insert].region.hdr_decl = added_extern + tokens[extern_insert].region.hdr_decl;
+				added_extern = "";
+			pass
 		elif context == 0b00010:
 			region.src_decl = raw;
 		elif context == 0b00011:
@@ -276,8 +307,8 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 		elif context == 0b00101:
 			region.hdr_decl = raw;
 		elif context == 0b00110:
-			region.hdr_decl = raw;
-			region.src_impl = raw if i != index_name else semantic_stack.struct_prefix + raw;
+			region.hdr_decl = decl;
+			region.src_impl = impl if i != index_name else semantic_stack.struct_prefix + impl;
 		elif context == 0b00111:
 			region.hdr_decl = raw;
 		elif context == 0b01000:
@@ -298,13 +329,19 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 		elif context == 0b01111:
 			region.hdr_decl = raw;
 		elif context == 0b10000:
-			region.src_decl = added_extern + raw;
-			region.src_impl = raw;
-			added_extern = "";
+			region.src_decl = decl;
+			region.src_impl = impl;
+			if extern_insert == i:
+				tokens[extern_insert].region.src_decl = added_extern + tokens[extern_insert].region.src_decl;
+				added_extern = "";
+			pass
 		elif context == 0b10001:
-			region.src_decl = added_extern + raw;
-			region.src_impl = raw;
-			added_extern = "";
+			region.src_decl = decl;
+			region.src_impl = impl;
+			if extern_insert == i:
+				tokens[extern_insert].region.src_decl = added_extern + tokens[extern_insert].region.src_decl;
+				added_extern = "";
+			pass
 		elif context == 0b10010:
 			region.src_decl = raw;
 		elif context == 0b10011:
@@ -314,8 +351,8 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 		elif context == 0b10101:
 			region.src_decl = raw;
 		elif context == 0b10110:
-			region.src_decl = raw;
-			region.src_impl = raw if i != index_name else semantic_stack.struct_prefix + raw;
+			region.src_decl = decl;
+			region.src_impl = impl if i != index_name else semantic_stack.struct_prefix + impl;
 		elif context == 0b10111:
 			region.src_decl = raw;
 		elif context == 0b11000:
@@ -771,8 +808,7 @@ def _function(tokens: list[SToken], index: int, index_kwd: int, endex: int, sema
 pass
 def _operatorSkip(tokens: list[SToken], index_kwd: int, endex: int):
 	for (i, token) in SimpleSliceIter(tokens, index_kwd + 1, endex):
-		if token.typ in TokenType.SYMBOL: continue;
-		break;
+		if token.typ == TokenType.SYMBOL: break;
 	pass
 	if tokens[i].raw == "(":
 		i = _tokenIndex(tokens, ")", i) + 1;
@@ -802,16 +838,15 @@ def _namespace(tokens: list[SToken], index: int, index_kwd: int, endex: int, sem
 	pass
 	endex_scope = _findClosingNormal(tokens, index_scope);
 	
-	for (i, token) in SimpleSliceIter(tokens, index, index_scope + 1):
-		token.ephermal = not semantic_stack.anonymous;
+	for (i, token) in chain(SimpleSliceIter(tokens, index, index_scope + 1), [(endex_scope, tokens[endex_scope])]):
+		token.ephermal = True;
 		token.region.src_decl = token.raw;
 		token.region.src_impl = token.raw;
 	pass
-	tokens[endex_scope].ephermal = not semantic_stack.anonymous;
-	tokens[endex_scope].region.src_decl = token.raw;
-	tokens[endex_scope].region.src_impl = token.raw;
 	
-	if _semanticAnalysisRecursion(tokens, index_scope + 1, endex_scope, semantic_stack) != endex_scope: raise ParseError;
+	for i in chain(range(index, index_scope + 1), [endex_scope]): fwd.addCandidate(i);
+	
+	if _semanticAnalysisRecursion(tokens, index_scope + 1, endex_scope, semantic_stack, fwd) != endex_scope: raise ParseError;
 	
 	return endex_scope + 1;
 pass
@@ -848,7 +883,7 @@ def _template(tokens: list[SToken], index: int, index_kwd: int, endex: int, sema
 	for (i, t) in SimpleSliceIter(tokens, endex_internal, endex):
 		if t.ephermal: continue;
 		if t.raw == "fun": continue;
-		regions_to_fill = [key for key in sematic_region_keys if not getattr(t.region, key).isspace()];
+		regions_to_fill = [key for key in sematic_region_keys if getattr(t.region, key)];
 		break;
 	pass
 	for (i, token) in SimpleSliceIter(tokens, index, endex_internal):
@@ -892,12 +927,19 @@ def _friend(tokens: list[SToken], index: int, index_kwd: int, endex: int, semant
 	return _parseNextUnit(tokens, index_kwd + 1, endex, semantic_stack, fwd);
 pass
 
-def _enum(tokens: list[SToken], index: int, index_kwd: int, endex: int, semantic_stack: SemanticStack, fwd: FwdRegistry) -> int:
+def _enum_struct_skip(tokens: list[SToken], index_kwd, endex) -> int:
+	for (i, token) in (it := SimpleSliceIter(tokens, index_kwd + 1, endex)):
+		if token.raw == ";": return index_kwd + 1;
+		if token.raw == "{": return _findClosingNormal(tokens, i) + 1;
+		if token.raw in "<([": it.setNext(_findClosing(tokens, i));
+	pass
+	return index_kwd + 1;
+pass
+def _enum(tokens: list[SToken], index: int, index_kwd: int, endex: int, semantic_stack: SemanticStack, fwd: FwdRegistry, has_var: bool) -> int:
 	endex = _tokenIndex(tokens, "}", index_kwd + 1) + 1;
 	
 	index_name = None; #	good enough, we treat name same as we treat kwd anyway
-	for (i, token) in (it := SimpleSliceIter(tokens, index, endex)):
-		if token.raw == "enum": continue;
+	for (i, token) in (it := SimpleSliceIter(tokens, index_kwd + 1, endex)):
 		if token.typ in EPHERMALS: continue;
 		if is_notaname(token): it.setNext(is_notaname.skip(tokens, i));
 		if token.typ == TokenType.SYMBOL: break;
@@ -913,19 +955,25 @@ def _enum(tokens: list[SToken], index: int, index_kwd: int, endex: int, semantic
 			if semantic_stack.anonymous: token.region.src_decl = token.raw;
 			else                       : token.region.hdr_decl = token.raw;
 		pass
-		tokens[index_name].should_be_included_in_var = True;
-		tokens[index_kwd ].should_be_included_in_var = True;
-	else:
+		if has_var:
+			tokens[index_name].should_be_included_in_var = True;
+			tokens[index_kwd ].should_be_included_in_var = True;
+		pass
+	elif has_var:
 		for (i, token) in SimpleSliceIter(tokens, index, endex):
 			token.should_be_included_in_var = True;
+		pass
+	else:
+		for (i, token) in SimpleSliceIter(tokens, index, endex):
+			if semantic_stack.anonymous: token.region.src_decl = token.raw;
+			else                       : token.region.hdr_decl = token.raw;
 		pass
 	pass
 	return endex;
 pass
 
-def _struct(tokens: list[SToken], index: int, index_kwd: int, endex: int, semantic_stack: SemanticStack, fwd: FwdRegistry) -> int:
+def _struct(tokens: list[SToken], index: int, index_kwd: int, endex: int, semantic_stack: SemanticStack, fwd: FwdRegistry, has_var: bool) -> int:
 	semantic_stack = semantic_stack.copy();
-	my_fwd = FwdRegistry();
 	
 	index_name = None;
 	i = index_kwd + 1;
@@ -944,53 +992,86 @@ def _struct(tokens: list[SToken], index: int, index_kwd: int, endex: int, semant
 		pass
 	pass
 	
-	for (index_scope, token) in SimpleSliceIter(tokens, i, endex):
-		if token.raw == ";": return index_name + 1; #	just a declaration (like struct S;)
+	endex_fwd = None;
+	for (index_scope, token) in (it := SimpleSliceIter(tokens, i, endex)):
+		if token.raw == ":":
+			endex_fwd = index_scope;
+			continue;
+		pass
+		if token.raw in "<([":
+			it.setNext(_findClosing(tokens, index_scope));
+			continue;
+		pass
+		if token.raw in ";,": 
+			if has_var:
+				return index;
+			else:
+				for (i, token) in SimpleSliceIter(tokens, index, index_scope + 1):
+					if semantic_stack.anonymous: token.region.src_decl = token.raw;
+					else:                        token.region.hdr_decl = token.raw;
+					if index_name is not None:
+						fwd.add(i);
+						token.region.fwd = token.raw;
+					pass
+				pass
+				fwd.cancelCandidates();
+				return index_scope + 1;
+			pass
+		pass
 		if token.raw == "{": break;
 	else:
 		raise ParseError;
 	pass
 	endex_scope = _findClosingNormal(tokens, index_scope);
+	if endex_fwd is None: endex_fwd = index_scope;
 	
-	tokens[index_scope].fwd = my_fwd;
-	#	even if unnamed struct, we may want to fwd
-	if _semanticAnalysisRecursion(tokens, index_scope + 1, endex_scope, semantic_stack, my_fwd) != endex_scope: raise ParseError;
 	
-	tokens[index_name].should_be_included_in_var = True;
-	tokens[index_kwd ].should_be_included_in_var = True;
-
+	tokens[index_scope].fwd = my_fwd = FwdRegistry(index_scope + 1);
+	
 	if index_name is None:
+		#	even if unnamed struct, we may want to fwd
+		if _semanticAnalysisRecursion(tokens, index_scope + 1, endex_scope, semantic_stack, my_fwd) != endex_scope: raise ParseError;
 		for (i, token) in SimpleSliceIter(tokens, index, endex_scope + 1):
 			#	overpower whatever happened in _semanticAnalysisRecursion (except fwd)
-			wh = whitespaceReplacement(token.raw);
 			region = token.region;
-			region.hdr_decl = wh;
-			region.hdr_impl = wh;
-			region.src_decl = wh;
-			region.src_impl = wh;
+			region.fwd      = "";
+			region.hdr_decl = "";
+			region.hdr_impl = "";
+			region.src_decl = "";
+			region.src_impl = "";
 			token.should_be_included_in_var = True;
 		pass
 		return endex_scope + 1;
 	pass
 	
 	name = tokens[index_name].raw;
+	for (i, token) in chain(SimpleSliceIter(tokens, index, index_scope + 1), [(endex_scope, tokens[endex_scope])]):
+		if semantic_stack.anonymous: token.region.src_decl = token.raw;
+		else                       : token.region.hdr_decl = token.raw;
+	pass
+	if not has_var:
+		for (i, token) in SimpleSliceIter(tokens, index_scope + 1, endex):
+			if semantic_stack.anonymous: token.region.src_decl = token.raw;
+			else                       : token.region.hdr_decl = token.raw;
+		pass
+	pass
+	if index_name is not None:
+		for (i, token) in SimpleSliceIter(tokens, index, endex_fwd):
+			fwd.add(i);
+			token.region.fwd = token.raw;
+		pass
+		fwd.add(endex_scope);
+		tokens[endex_scope].region.fwd = ";"
+	pass
+	
+
 	semantic_stack.struct_prefix += name + " :: ";
 	semantic_stack.in_struct += 1;
-	
-	for (i, token) in SimpleSliceIter(tokens, index, index_scope):
-		if semantic_stack.anonymous: token.region.src_decl = token.raw;
-		else                       : token.region.hdr_decl = token.raw;
-		fwd.add(i);
+	if _semanticAnalysisRecursion(tokens, index_scope + 1, endex_scope, semantic_stack, my_fwd) != endex_scope: raise ParseError;
+
+	if has_var:
+		tokens[endex_scope].should_be_included_in_var = " " + tokens[index_kwd].raw + " " + tokens[index_name].raw + " ";
 	pass
-	tokens[index_scope].region.fwd = ";"
-	fwd.add(index_scope);
-	
-	for i in [index_scope, endex_scope]:
-		token = tokens[i];
-		if semantic_stack.anonymous: token.region.src_decl = token.raw;
-		else                       : token.region.hdr_decl = token.raw;
-	pass
-	
 	
 	return endex_scope + 1;
 pass
@@ -998,6 +1079,7 @@ pass
 
 class is_notaname:
 	def __new__(cls, token: SToken):
+		#	note: special treatment of requires in _var
 		return token.raw in ("__attribute__", "requires", );
 	pass
 	@staticmethod
@@ -1019,21 +1101,16 @@ def _handleDefaultArguments(tokens: list[SToken], index_args: int, endex_args: i
 		if is_default_value:
 			for (k, t) in SimpleSliceIter(tokens, i, j):
 				region = t.region;
-				wh = whitespaceReplacement(t.raw);
-				if not region.fwd.isspace():
-					region.hdr_decl = wh;
-					region.hdr_impl = wh;
-					region.src_decl = wh;
-					region.src_impl = wh;
-				elif not region.hdr_decl.isspace():
-					region.hdr_impl = wh;
-					region.src_decl = wh;
-					region.src_impl = wh;
-				elif not region.hdr_impl.isspace():
-					region.src_decl = wh;
-					region.src_impl = wh;
-				elif not region.src_decl.isspace():
-					region.src_impl = wh;
+				region.fwd = "";
+				if region.hdr_decl:
+					region.hdr_impl = "";
+					region.src_decl = "";
+					region.src_impl = "";
+				elif region.hdr_impl:
+					region.src_decl = "";
+					region.src_impl = "";
+				elif region.src_decl:
+					region.src_impl = "";
 				pass
 			pass
 		pass

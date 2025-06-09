@@ -8,7 +8,6 @@ from dataclasses import dataclass;
 
 from tokenizer import TokenType, Token;
 import file_names;
-import token_outputer;
 
 #	gcc -E -o output input
 #	we should add 
@@ -25,8 +24,8 @@ class RegionInfo:
 	hdr_decl: bool = False;
 	hdr_impl: bool = False;
 	
-	_src: bool;
-	_hdr: bool;
+	#	_src: bool;
+	#	_hdr: bool;
 	
 	@property
 	def src(self): return (False
@@ -39,6 +38,14 @@ class RegionInfo:
 		or self.hdr_impl
 	);
 	
+	@property
+	def any_dst(self): return (False
+		or self.src_decl
+		or self.src_impl
+		or self.hdr_decl
+		or self.hdr_impl
+	);
+	
 	@classmethod
 	def fromDict(cls, d):
 		self = cls();
@@ -47,7 +54,7 @@ class RegionInfo:
 	pass
 	def copy(self): return copy.copy(self);
 	def __getitem__(self, key): return getattr(self, key);
-	def __setitem__(self, key): return setattr(self, key);
+	def __setitem__(self, key, value): return setattr(self, key, value);
 	def keys(self): return region_markers;
 	def values(self): return [self[key] for key in region_markers];
 	def items(self): return [(key, self[key]) for key in region_markers];
@@ -124,7 +131,9 @@ def prepareForPreprocess(tokens: list[RToken]) -> Iterable[str]:
 	yield "#pragma once\n";
 	yield "<:::>\n";
 	for (index, token) in enumerate(tokens):
-		if token.typ == TokenType.MACRO:
+		if token.declared_region.ide:
+			yield whitespaceReplacement(token.raw);
+		elif token.typ == TokenType.MACRO:
 			token: MacroToken;
 			if token.macro_type == MacroType.INCLUDE:
 				if token.declared_region.ide:
@@ -154,25 +163,17 @@ def prepareForPreprocess(tokens: list[RToken]) -> Iterable[str]:
 				yield f"<:::{index}>";
 			elif token.macro_type == MacroType.ENDREGION:
 				yield f"<:::{index}>";
+			elif token.declared_region.zzc: 
+				yield token.raw;
+				if token.declared_region.any_dst: yield f"\n<:::{index}>";
 			else:
-				if token.declared_region.ide:
-					yield whitespaceReplacement(token.raw);
-					continue;
-				pass
-				if token.declared_region.zzc: 
-					yield token.raw;
-					if token.declared_region.src or token.declared_region.hdr: yield f"\n<:::{index}>";
-				else: yield f"<:::{index}>";
+				yield f"<:::{index}>";
 			pass
 		elif token.typ == TokenType.COMMENT:
 			yield f"<:::{index}>"; #	TODO do we need this?
 		elif token.typ == TokenType.WHITESPACE:
 			yield token.raw;
 		else:
-			if token.declared_region.ide:
-				yield whitespaceReplacement(token.raw);
-				continue;
-			pass
 			if token.declared_region.zzc: yield token.raw;
 			elif token.declared_region.src or token.declared_region.hdr: yield f"<:::{index}>";
 			else: yield token.raw;
@@ -187,7 +188,7 @@ def gatherMacroInfo(token: MacroToken):
 	if match := re.match(r"#[\s\\]*pragma[\s\\]*region[\s\\]*zzc\b", raw):
 		token.macro_type = MacroType.REGION;
 		words = re.split(r"\b", raw[match.end() : ]);
-		token.relevant_info = info = RegionInfo({key: key in words for key in region_markers});
+		token.relevant_info = info = RegionInfo.fromDict({key: key in words for key in region_markers});
 		if not info.src and "src" in words: info.src_impl = True;
 		if not info.hdr and "hdr" in words: info.hdr_impl = True;
 		if "src" in words: info._src = True;
@@ -237,7 +238,29 @@ def processMarkers(raw: str, original_tokens: list[Token]) -> Iterable[str]:
 			index_start += len("<:::");
 		pass
 	pass
+	yield raw[index_start : endex_end]
 pass
+def transformMacroTokensAfterPreprocess(tokens: list[RToken]):
+	for token in tokens:
+		if token.typ != TokenType.MACRO: continue;
+		token: MacroToken;
+		if token.macro_type == MacroType.INCLUDE:
+			info: IncludeInfo = token.relevant_info;
+			if not info.is_zzc: continue;
+			new_path = file_names.file_naming.hdr(file_names.FilenameParts(info.filename));
+			token.raw = info.before_filename + new_path + info.after_filename;
+		elif token.macro_type == MacroType.REGION:
+			token.raw = whitespaceReplacement(token.raw);
+		elif token.macro_type == MacroType.DEFINE:
+			name      = token.relevant_info.name;
+			def_undef = token.relevant_info.def_undef;
+			if   def_undef == +1: token.raw = f"\n#ifndef {name}\n{token.raw}\n#endif\n"
+			if   def_undef == -1: token.raw = f"\n#ifdef  {name}\n{token.raw}\n#endif\n"
+		pass
+		pass
+	pass
+pass
+
 def _markerIndex(raw: str, sub: str, index_start: int, string_indexes: list[tuple[int, int]]) -> int:
 	while True:
 		index = raw.index(sub, index_start);
@@ -259,7 +282,7 @@ def _findIndexesOf[T](collection: Sequence[T], item: T) -> Iterable[int]:
 	index = 0;
 	while True:
 		try: index = collection.index(item, index);
-		except IndexError: return;
+		except ValueError: return;
 		yield index;
 		index += 1;
 	pass

@@ -1,7 +1,12 @@
+from __future__ import annotations;
 from typing import *;
 from common import *;
 
-import os;
+import sys, os;
+
+if TYPE_CHECKING:
+	from semantic import SMacroToken;
+pass
 
 class FilenameParts:
 	path: str;
@@ -32,4 +37,40 @@ class file_naming:
 	def macro_temp_1(p: FilenameParts) -> str: return p.folder + p.name + ".temp.1" + (".c"  if p.extension == ".zc" else ".cpp");
 	@staticmethod
 	def macro_temp_2(p: FilenameParts) -> str: return p.folder + p.name + ".temp.2" + (".c"  if p.extension == ".zc" else ".cpp");
+	@staticmethod
+	def obj         (p: FilenameParts) -> str: return p.folder + p.name + p.extension + ".o";
+pass
+
+
+def normpath(path: str) -> str: return os.path.normpath(path).replace("\\", "/");
+
+if len(sys.argv) == 1:
+	print("Usage python zzc.py project_root/");
+	sys.exit(0);
+else:
+	[_, root] = sys.argv;
+pass
+root += "/";
+root = normpath(root);
+
+class File:
+	tokens: list[SMacroToken];
+	def __init__(self, path: str):
+		self.path = normpath(os.path.relpath(path, root));
+		
+		parts = FilenameParts(self.path);
+		self.src          = file_naming.src         (parts);
+		self.hdr          = file_naming.hdr         (parts);
+		self.inc          = file_naming.inc         (parts);
+		self.macro_temp_1 = file_naming.macro_temp_1(parts);
+		self.macro_temp_2 = file_naming.macro_temp_2(parts);
+		self.obj          = file_naming.obj         (parts);
+	pass
+	
+	def relativeFile(self, path: str):
+		return File(os.path.dirname(self.path) + "/" + path);
+	pass
+	
+	def __hash__(self): return hash(self.path);
+	def __eq__(self, other): return type(other) is File and self.path == other.path;
 pass

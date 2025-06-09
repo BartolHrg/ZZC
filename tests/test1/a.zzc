@@ -1,0 +1,9 @@
+struct Incrementor {
+	fun int operator ()() {
+		return ++x;
+	}
+} incrementor;
+
+namespace {
+	int x = 100;
+}

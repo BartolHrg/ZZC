@@ -1,0 +1,27 @@
+#include "./module.zzc"
+
+template <int N>
+struct Vector : Matrix<1, N> {
+	fun operator [](int i) {
+		return self.arr[0][i];
+	}
+	fun int dot(Vector<N>& other) {
+		int result = 0;
+		for (int i = 0; i < N; ++i) {
+			result += self[i] * other[i];
+		}
+		return result;
+	}
+	fun int length2() {
+		int result = 0;
+		for (int i = 0; i < N; ++i) {
+			result += self[i] * self[i];
+		}
+		return result;
+	}
+};
+
+fun void af() {
+	MyType a;
+	a.f();
+}

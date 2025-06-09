@@ -1,0 +1,8 @@
+#define B 789
+#include "./module.zzh"
+int xb = B;
+
+fun void bf() {
+	MyType a;
+	a.f();
+}
