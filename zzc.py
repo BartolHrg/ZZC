@@ -7,7 +7,7 @@ import random;
 
 from common import *;
 from file_names import *;
-#	from config import config;
+from config import config;
 import tokenizer, macro_processor, semantic, file_composer;
 
 #	typs = ["-zzc", "-src", "-hdr"];
@@ -60,6 +60,16 @@ def tokenize(file: File):
 	file.tokens = list(tokenizer.tokenize(raw));
 pass
 
+def compile(command: ConfigCommand, input: str, output: str):
+	cmd = command({"in": input, "out": output});
+	print(cmd);
+	result = subprocess.run(cmd, stderr=subprocess.PIPE, text=True);
+	if result.returncode != 0:
+		sys.stderr.write(result.stderr);
+		sys.stderr.write("\n" + "=" * 80 + "\n");
+		raise ParseError(input);
+	pass
+pass
 
 zzc_files: list[File] = [];
 for (base, folders, files) in os.walk(root):
@@ -94,25 +104,22 @@ pass
 #	update step 1: macro preprocess all
 #	update step 2: semantic
 
+
 for file in zzc_files:
-	with open(root + "/" + file.path) as f: raw = f.read();
+	with open(file.abs_file.path) as f: raw = f.read();
 	file.tokens = list(tokenizer.tokenize(raw));
 	macro_processor.transformIntoRTokens(file.tokens);
-	with open(root + "/" + file.macro_temp_1, "w") as f:
+	with open(file.abs_file.macro_temp_1, "w") as f:
 		for chunk in macro_processor.prepareForPreprocess(file.tokens):
 			f.write(chunk);
 		pass
 	pass
 pass
 for file in zzc_files:
-	r = subprocess.run(["gcc", "-E", "-o", root + "/" + file.macro_temp_2, root + "/" + file.macro_temp_1], stderr=subprocess.PIPE, text=True);
-	if r.returncode != 0: 
-		sys.stderr.write(r.stderr);
-		raise ParseError;
-	pass
+	compile(config.compiler.cpp.preprocess, file.abs_file.macro_temp_1, file.abs_file.macro_temp_2);
 pass
 for file in zzc_files:
-	with open(root + "/" + file.macro_temp_2) as f: raw = f.read();
+	with open(file.abs_file.macro_temp_2) as f: raw = f.read();
 	raw = "".join(macro_processor.processMarkers(raw, file.tokens));
 	file.tokens = list(tokenizer.tokenize(raw));
 	macro_processor.transformIntoRTokens(file.tokens);
@@ -120,7 +127,7 @@ for file in zzc_files:
 	semantic.semanticAnalysis(file.tokens);
 	
 	#	file_id = random.randint(1<<32, (1<<64)-1);
-	with open(root + "/" + file.hdr, "w") as f, open(root + "/" + file.inc, "w") as i:
+	with open(file.abs_file.hdr, "w") as f, open(file.abs_file.inc, "w") as i:
 		f.write("#pragma once\n");
 		i.write("#pragma once\n");
 		for chunk in file_composer.compose(file.tokens, "hdr_decl"):
@@ -134,7 +141,7 @@ for file in zzc_files:
 			i.write(chunk);
 		pass
 	pass
-	with open(root + "/" + file.src, "w") as f:
+	with open(file.abs_file.src, "w") as f:
 		f.write(f'#include "./{file.hdr}"\n');
 		for chunk in file_composer.compose(file.tokens, "src_decl"):
 			f.write(chunk);
@@ -146,7 +153,7 @@ for file in zzc_files:
 	pass
 pass
 for file in zzc_files:
-	if subprocess.run(["g++", "-c", "-Dfun=", "-Dself=(*this)", "-o", root + "/" + file.obj, root + "/" + file.src]).returncode != 0: raise ParseError;
+	compile(config.compiler.cpp.obj, file.abs_file.src, file.abs_file.obj);
 pass
-if subprocess.run(["g++", "-o", root + "/a.exe", *(root + "/" + file.obj for file in zzc_files)]).returncode != 0: raise ParseError;
+compile(config.compiler.target, [file.abs_file.obj for file in zzc_files], config.paths.exe);
 

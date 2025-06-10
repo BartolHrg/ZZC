@@ -1,0 +1,17 @@
+{
+	"paths": {
+		"zzc": "src",
+		"tmp": "tmp",
+		"cpp": "cpp",
+		"obj": "obj",
+		"exe": "build/a.exe"
+	},
+	"compiler": {
+		"preprocess": ["gcc", "-E", "-o", {"file": "out"}, {"file": "in"}],
+		"obj": ["g++", "-c", {"var": "CXX_FLAGS"}, "-o", {"file": "out"}, {"file": "in"}],
+		"target": ["g++", "-o", {"file":"out"}, {"file":"in"}]
+	},
+	"vars": {
+		"CXX_FLAGS": ["-Dfun=", "-Dself=(*this)", "-std=c++23"]
+	}
+}

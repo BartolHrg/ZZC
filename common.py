@@ -49,8 +49,10 @@ class _SimpleRangeIter:
 	pass
 pass
 class SimpleSliceIter[T](Iterable[tuple[int, T]]):
-	def __init__(self, seq: Sequence[T], start: int, stop: int = None):
+	def __init__(self, seq: Sequence[T], start: int = None, stop: int = None):
 		self.seq = seq;
+		if start is None: start = 0;
+		if stop is None: stop = len(seq);
 		self.rit = _SimpleRangeIter(SimpleRange(start, stop));
 	pass
 	def __iter__(self): return self;
@@ -58,6 +60,6 @@ class SimpleSliceIter[T](Iterable[tuple[int, T]]):
 		i = next(self.rit);
 		return (i, self.seq[i]);
 	pass
-	def setNext(self, value: int): return self.rit.setNext(value);
+	def setNext(self, index: int): return self.rit.setNext(index);
 pass
 
