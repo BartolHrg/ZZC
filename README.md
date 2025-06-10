@@ -16,7 +16,8 @@ At the moment, those files are generated in the same place as the `.zzc` file, b
 ### .zzc.config.json  
 
 For controlling compilation.  
-```json
+```jsonc
+//	The comments are just for clarity. Don't use comments in your config!
 {
 	"paths": {
 		"zzc": "src", //	root for .zzc and generated .zzh files
@@ -144,7 +145,7 @@ struct S {
 * Similar to `#pragma region zzc` tags, macros for the same purpose:  
 ```c++
 fun void f() hdr_impl({ 
-    printf("This body would go to header file");
+	printf("This body would go to header file");
 });
 ```
 * Better CLI, including a command for cleaning.  
