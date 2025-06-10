@@ -35,7 +35,7 @@ fun void f() {}
   * `cpp`: should not be preprocessed by ZZC.  
   * `zzc`: should be preprocessed by ZZC. (default)  
   * `hdr`, `src`: synonyms for `hdr_impl`, `src_impl`.  
-  * `hdr_decl`, `hdr_impl`, `src_decl`, `src_impl`: but region in corresponding _section_.  
+  * `hdr_decl`, `hdr_impl`, `src_decl`, `src_impl`: put region in corresponding _section_.  
   
   Tags can be combined (e.g. `#pragma region zzc src_decl src_impl`) and nested `#pragma region zzc src_decl \n #pragma region zzc src_impl`.  
   Both of these mean region will go into both _sections_.  
@@ -79,7 +79,7 @@ record R {
 };
 ```
 * To include other `.zzc` files, you can either include `.zzc` or `.zzh` file.  
-  Only difference is that `.zzc` file will (wrongly) expose private stuff to IDE (but using them will cause error during compilation)  
+  Only difference is that `.zzc` file will (wrongly) expose private stuff to IDE (and using them will cause error during compilation)  
 
 ## Features  
 * Generate declaration and implementation for global variables, functions, class member functions, class static members.  
@@ -95,7 +95,7 @@ struct S {
 }
 ```
 
-## Planed features  
+## Planned features  
 
 * Separation of generated files (currently, all generated files are in the same folder as the `.zzc` file)  
 * Generate only if needed (currently, all files are recompiled every time, even if nothing has changed)  
