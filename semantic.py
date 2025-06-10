@@ -93,7 +93,7 @@ def semanticAnalysis(tokens: list[RToken]):
 	pass
 	
 	for token in tokens:
-		regions = {key: getattr(token.declared_region, key) for key in region_markers if key not in ("zzc", "ide", )};
+		regions = {key: getattr(token.declared_region, key) for key in region_markers if key not in ("zzc", "cpp", "ide", )};
 		if any(regions.values()):
 			raw = token.raw;
 			reg = token.region = SematicRegions();
@@ -182,6 +182,7 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 	index_struct = None;
 	has_init = False;
 	extern_insert = index; #	extern does not clash with struct, since, if struct has no body, it's in impl and there is no extern
+	index_static = None;
 	
 	for (i, token) in (it := SimpleSliceIter(tokens, index, index_comma)):
 		if token.raw in ("struct", "class", "union", "enum", ): 
@@ -189,6 +190,8 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 			it.setNext(_enum_struct_skip(tokens, i, index_comma + 1));
 			index_name = None;
 			continue;
+		elif token.raw == "static":
+			index_static = i;
 		elif token.raw == "extern":
 			extern_insert = None;
 		elif token.typ == TokenType.MACRO and extern_insert is not None:
@@ -308,7 +311,7 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 			region.hdr_decl = raw;
 		elif context == 0b00110:
 			region.hdr_decl = decl;
-			region.src_impl = impl if i != index_name else semantic_stack.struct_prefix + impl;
+			if i != index_static: region.src_impl = impl if i != index_name else semantic_stack.struct_prefix + impl;
 		elif context == 0b00111:
 			region.hdr_decl = raw;
 		elif context == 0b01000:
@@ -352,7 +355,7 @@ def _var(tokens: list[SToken], index: int, index_comma: int, semantic_stack: Sem
 			region.src_decl = raw;
 		elif context == 0b10110:
 			region.src_decl = decl;
-			region.src_impl = impl if i != index_name else semantic_stack.struct_prefix + impl;
+			if i != index_static: region.src_impl = impl if i != index_name else semantic_stack.struct_prefix + impl;
 		elif context == 0b10111:
 			region.src_decl = raw;
 		elif context == 0b11000:
@@ -456,11 +459,11 @@ pass
 
 def _function(tokens: list[SToken], index: int, index_kwd: int, endex: int, semantic_stack: SemanticStack, fwd: FwdRegistry) -> int:
 	semantic_stack = semantic_stack.copy();
-	static = False;
+	index_static = None;
 	inline = False;
 	index_name = None;
 	for (i, token) in (it := SimpleSliceIter(tokens, index, endex)):
-		if   token.raw == "static"   : static = True;
+		if   token.raw == "static"   : index_static = i;
 		elif token.raw == "inline"   : inline = True;
 		elif token.raw == "constexpr": inline = True;
 		elif is_notaname(token):
@@ -478,6 +481,7 @@ def _function(tokens: list[SToken], index: int, index_kwd: int, endex: int, sema
 			pass
 		pass
 	pass
+	static = index_static is not None;
 	semantic_stack.static += static;
 	semantic_stack.inline += inline;
 	if index_name is None: raise ParseError;
@@ -549,7 +553,7 @@ def _function(tokens: list[SToken], index: int, index_kwd: int, endex: int, sema
 		elif context == 0b00110:
 			region.hdr_decl = raw;
 			if i in indexes_of_equal: continue;
-			region.src_impl = raw if i != index_name else semantic_stack.struct_prefix + raw;
+			if i != index_static: region.src_impl = raw if i != index_name else semantic_stack.struct_prefix + raw;
 		elif context == 0b00111:
 			region.hdr_decl = raw;
 		elif context == 0b01000:
@@ -602,7 +606,7 @@ def _function(tokens: list[SToken], index: int, index_kwd: int, endex: int, sema
 		elif context == 0b10110:
 			region.src_decl = raw;
 			if i in indexes_of_equal: continue;
-			region.src_impl = raw if i != index_name else semantic_stack.struct_prefix + raw;
+			if i != index_static: region.src_impl = raw if i != index_name else semantic_stack.struct_prefix + raw;
 		elif context == 0b10111:
 			region.src_decl = raw;
 		elif context == 0b11000:
@@ -1049,12 +1053,12 @@ def _struct(tokens: list[SToken], index: int, index_kwd: int, endex: int, semant
 		if semantic_stack.anonymous: token.region.src_decl = token.raw;
 		else                       : token.region.hdr_decl = token.raw;
 	pass
-	if not has_var:
-		for (i, token) in SimpleSliceIter(tokens, index_scope + 1, endex):
-			if semantic_stack.anonymous: token.region.src_decl = token.raw;
-			else                       : token.region.hdr_decl = token.raw;
-		pass
-	pass
+	#	if not has_var:
+	#		for (i, token) in SimpleSliceIter(tokens, index_scope + 1, endex):
+	#			if semantic_stack.anonymous: token.region.src_decl = token.raw;
+	#			else                       : token.region.hdr_decl = token.raw;
+	#		pass
+	#	pass
 	if index_name is not None:
 		for (i, token) in SimpleSliceIter(tokens, index, endex_fwd):
 			fwd.add(i);
@@ -1071,6 +1075,10 @@ def _struct(tokens: list[SToken], index: int, index_kwd: int, endex: int, semant
 
 	if has_var:
 		tokens[endex_scope].should_be_included_in_var = " " + tokens[index_kwd].raw + " " + tokens[index_name].raw + " ";
+	else:
+		token = tokens[endex - 1]; #	semicolon
+		if semantic_stack.anonymous: token.region.src_decl = token.raw;
+		else                       : token.region.hdr_decl = token.raw;
 	pass
 	
 	return endex_scope + 1;

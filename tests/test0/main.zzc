@@ -1,1 +1,16 @@
-fun int main() {}
+#pragma region zzc src cpp
+	#include <iostream>
+#pragma endregion zzc
+
+#pragma region zzc hdr
+
+fun int main() noexcept {}
+
+#pragma endregion zzc
+
+namespace {
+	struct S {
+		static int x = 8;
+		fun static void f() {}
+	};
+}

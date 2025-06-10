@@ -17,6 +17,7 @@ import file_names;
 class RegionInfo:
 	ide     : bool = False;
 	zzc     : bool = False;
+	cpp     : bool = False;
 	
 	src_decl: bool = False;
 	src_impl: bool = False;
@@ -131,17 +132,18 @@ def prepareForPreprocess(tokens: list[RToken]) -> Iterable[str]:
 	yield "#pragma once\n";
 	yield "<:::>\n";
 	for (index, token) in enumerate(tokens):
-		if token.declared_region.ide:
+		reg = token.declared_region;
+		if reg.ide:
 			yield whitespaceReplacement(token.raw);
 		elif token.typ == TokenType.MACRO:
 			token: MacroToken;
 			if token.macro_type == MacroType.INCLUDE:
-				if token.declared_region.ide:
+				if reg.ide:
 					yield whitespaceReplacement(token.raw);
 					continue;
 				pass
-				shouldnt_yield = token.declared_region.zzc and not token.declared_region.src and not token.declared_region.hdr;
-				if not shouldnt_yield: 
+				should_yield = reg.zzc or (not reg.cpp and not reg.any_dst);
+				if should_yield: 
 					info: IncludeInfo = token.relevant_info;
 					if info.is_zzc:
 						new_path = file_names.file_naming.macro_temp_1(file_names.FilenameParts(info.filename));
@@ -163,19 +165,19 @@ def prepareForPreprocess(tokens: list[RToken]) -> Iterable[str]:
 				yield f"<:::{index}>";
 			elif token.macro_type == MacroType.ENDREGION:
 				yield f"<:::{index}>";
-			elif token.declared_region.zzc: 
-				yield token.raw;
-				if token.declared_region.any_dst: yield f"\n<:::{index}>";
-			else:
+			elif reg.cpp or reg.any_dst:
 				yield f"<:::{index}>";
+			else:
+				yield token.raw;
+				if reg.any_dst: yield f"\n<:::{index}>";
 			pass
 		elif token.typ == TokenType.COMMENT:
 			yield f"<:::{index}>"; #	TODO do we need this?
 		elif token.typ == TokenType.WHITESPACE:
 			yield token.raw;
 		else:
-			if token.declared_region.zzc: yield token.raw;
-			elif token.declared_region.src or token.declared_region.hdr: yield f"<:::{index}>";
+			if reg.zzc: yield token.raw;
+			elif reg.cpp or reg.any_dst: yield f"<:::{index}>";
 			else: yield token.raw;
 		pass
 	pass
@@ -191,8 +193,8 @@ def gatherMacroInfo(token: MacroToken):
 		token.relevant_info = info = RegionInfo.fromDict({key: key in words for key in region_markers});
 		if not info.src and "src" in words: info.src_impl = True;
 		if not info.hdr and "hdr" in words: info.hdr_impl = True;
-		if "src" in words: info._src = True;
-		if "hdr" in words: info._hdr = True;
+		if "src" in words: info._src = True; #	this was made with idea to hoist #includes into decl/fwd
+		if "hdr" in words: info._hdr = True; #	but only if they were in non-specific region (src or hdr)
 	elif re.match(r"#[\s\\]*pragma[\s\\]*endregion[\s\\]*zzc\b", raw):
 		token.macro_type = MacroType.ENDREGION;
 	elif match := re.match(r"#[\s\\]*include[\s\\]*", raw):
@@ -250,6 +252,8 @@ def transformMacroTokensAfterPreprocess(tokens: list[RToken]):
 			new_path = file_names.file_naming.hdr(file_names.FilenameParts(info.filename));
 			token.raw = info.before_filename + new_path + info.after_filename;
 		elif token.macro_type == MacroType.REGION:
+			token.raw = whitespaceReplacement(token.raw);
+		elif token.macro_type == MacroType.ENDREGION:
 			token.raw = whitespaceReplacement(token.raw);
 		elif token.macro_type == MacroType.DEFINE:
 			name      = token.relevant_info.name;
