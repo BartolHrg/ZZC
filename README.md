@@ -7,7 +7,7 @@ C/C++ precompiler to separate source and header files.
 Write all your code inside `.zzc` files and it will generate `.hpp` and `.cpp` files for you.  
 It is similar to LZZ, but more modern and flexible.  
 
-To use it, run `python lzz.py your/project/root`.  
+To use it, run `python zzc.py your/project/root`.  
 For each `.zzc` file, it will generate: `.hpp`, `.cpp`, `.zzh`, `.temp.1.cpp`, `.temp.2.cpp`, and `.zzc.o` files.  
 At the moment, those files are generated in the same place as the `.zzc` file, but I plan to add separation in future.  
 
