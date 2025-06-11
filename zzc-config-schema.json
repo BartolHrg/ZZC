@@ -1,0 +1,108 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "ZZC Configuration",
+	"description": "Configuration schema for .zzc.config.json files",
+	"type": "object",
+	"properties": {
+		"paths": {
+			"type": "object",
+			"properties": {
+				"zzc": {
+					"type": "string",
+					"description": "root for .zzc and generated .zzh files"
+				},
+				"tmp": {
+					"type": "string",
+					"description": "destination for .tmp.? files"
+				},
+				"cpp": {
+					"type": "string",
+					"description": "destination for .hpp and .cpp files"
+				},
+				"obj": {
+					"type": "string",
+					"description": "destination for .o files"
+				},
+				"exe": {
+					"type": "string",
+					"description": "target (can also be left out and hardcoded into compiler.target command)"
+				}
+			}
+		},
+		"vars": {
+			"type": "object"
+		},
+		"compiler": {
+			"properties": {
+				"preprocess": {
+					"oneOf": [
+						{"$ref": "#/$defs/Command"},
+						{
+							"type": "object",
+							"properties": {
+								"c"  : {"$ref": "#/$defs/Command"},
+								"c++": {"$ref": "#/$defs/Command"}
+							}
+						}
+					]
+				},
+				"obj": {
+					"oneOf": [
+						{"$ref": "#/$defs/Command"},
+						{
+							"type": "object",
+							"properties": {
+								"c"  : {"$ref": "#/$defs/Command"},
+								"c++": {"$ref": "#/$defs/Command"}
+							}
+						}
+					]
+				},
+				"target": {"$ref": "#/$defs/Command"},
+				"c"  : {
+					"type": "object",
+					"properties": {
+						"preprocess": {"$ref": "#/$defs/Command"},
+						"obj"       : {"$ref": "#/$defs/Command"}
+					}
+				},
+				"c++": {
+					"type": "object",
+					"properties": {
+						"preprocess": {"$ref": "#/$defs/Command"},
+						"obj"       : {"$ref": "#/$defs/Command"}
+					}
+				}
+			}
+		}
+	},
+	"$defs": {
+		"Command": {
+			"type": "array",
+			"items": {
+				"anyOf": [
+					{"type": "string"},
+					{
+						"type": "object", 
+						"properties": {
+							"file": {
+								"anyOf": [{"const": "in"}, {"const": "out"}]
+							}
+						},
+						"additionalProperties": false
+					},
+					{
+						"type": "object", 
+						"properties": {
+							"var": {
+								"type": "string",
+								"description": "One of keys from vars"
+							}
+						},
+						"additionalProperties": false
+					}
+				]
+			}
+		}
+	}
+}
