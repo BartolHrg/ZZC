@@ -27,11 +27,11 @@ For controlling compilation.
 		"exe": "build/a.exe" //	target (can also be left out and hardcoded into "compiler"."target" command)
 	},
 	"compiler": {
-		"preprocess": ["gcc", "-E", "-o", {"file": "out"}, {"file": "in"}],
-		"obj": ["g++", "-c", {"var": "CXX_FLAGS"}, "-o", {"file": "out"}, {"file": "in"}],
-		"target": ["g++", "-o", {"file":"out"}, {"file":"in"}],
+		"preprocess": ["gcc", "-E", "-o", {"arg": "out"}, {"arg": "in"}],
+		"obj": ["g++", "-c", {"var": "CXX_FLAGS"}, "-o", {"arg": "out"}, {"arg": "in"}],
+		"target": ["g++", "-o", {"arg":"out"}, {"arg":"in"}],
 		"c++": {
-			"preprocess": ["g++", "-E", "-o", {"file": "out"}, {"file": "in"}],
+			"preprocess": ["g++", "-E", "-o", {"arg": "out"}, {"arg": "in"}],
 		}
 	},
 	"vars": {
@@ -39,6 +39,9 @@ For controlling compilation.
 	}
 }
 ```
+There is a schema for this in `./zzc-config-schema.json`.  
+To use it in VSCode, add this to your settings: `"json.schemas": [{"fileMatch": ["*.zzc.config.json"], "url": "file:///path/to/local/zzc-config-schema.json" or "https://raw.githubusercontent.com/BartolHrg/ZZC/refs/heads/main/zzc-config-schema.json"}]`  
+
 Everything is optional.  
 
 `paths` are paths. If some path doesn't exist, it will be generated. (`var` can't be used here)  
@@ -50,7 +53,7 @@ Everything is optional.
 - `target`: final product
 - Additionally, `preprocess` and `obj` can themselves be objects (like `"obj": {"c": []}`, which is treated exactly the same as `"c": {"obj": []}`).  
 
-Inside `compiler`, lists can have: strings, objects of form `{"file":"in|out"}` (for input and output files), and `{"var":"name"}` (for variables defined in `vars`).  
+Inside `compiler`, lists can have: strings, objects of form `{"arg":"in|out"}` (for input and output files), and `{"var":"name"}` (for variables defined in `vars`).  
 
 `vars` is for defining variables used in config.  
 

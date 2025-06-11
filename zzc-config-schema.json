@@ -85,7 +85,7 @@
 					{
 						"type": "object", 
 						"properties": {
-							"file": {
+							"arg": {
 								"anyOf": [{"const": "in"}, {"const": "out"}]
 							}
 						},

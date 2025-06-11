@@ -69,13 +69,13 @@ class ConfigCommand:
 		self.vars = vars;
 		self.parts = json.copy();
 	pass
-	def __call__(self, inputs: dict[str, str | list]) -> list[str]:
+	def __call__(self, args: dict[str, str | list]) -> list[str]:
 		result = self.vars.resolveVars(self.parts);
 		i = 0;
 		while i < len(result):
 			x = result[i];
-			if type(x) is dict and len(x) == 1 and "file" in x.keys():
-				y = inputs[x["file"]];
+			if type(x) is dict and len(x) == 1 and "arg" in x.keys():
+				y = args[x["arg"]];
 				if type(y) is list: 
 					result[i : i+1] = y;
 					i += len(y);
@@ -101,14 +101,14 @@ class ConfigCompiler:
 	def __init__(self, json: dict, vars: _ConfigVars):
 		x = {
 			"c"  : {
-				"preprocess": ["gcc", "-E", "-o", {"file":"out"}, {"file":"in"}],
-				"obj"       : ["gcc", "-c", "-o", {"file":"out"}, {"file":"in"}],
+				"preprocess": ["gcc", "-E", "-o", {"arg":"out"}, {"arg":"in"}],
+				"obj"       : ["gcc", "-c", "-o", {"arg":"out"}, {"arg":"in"}],
 			},
 			"c++": {
-				"preprocess": ["g++", "-E", "-o", {"file":"out"}, {"file":"in"}],
-				"obj"       : ["g++", "-c", "-o", {"file":"out"}, {"file":"in"}],
+				"preprocess": ["g++", "-E", "-o", {"arg":"out"}, {"arg":"in"}],
+				"obj"       : ["g++", "-c", "-o", {"arg":"out"}, {"arg":"in"}],
 			},
-			"target"        : ["g++",       "-o", {"file":"out"}, {"file":"in"}],
+			"target"        : ["g++",       "-o", {"arg":"out"}, {"arg":"in"}],
 		};
 		major_keys = ["c", "c++"];
 		minor_keys = ["preprocess", "obj", ];
